@@ -439,18 +439,3 @@ class AnalyseSim():
         
         else:
             return None, None
-        
-# start_date = '2019-10-11'
-# end_date = '2020-10-13'
-
-# data = ImportData(start_date, end_date)
-# prices = data.import_price_data(ticker_list=['^GSPC'])
-# data_dict = data.vectorize_data(prices)
-# tr = Returns().compute_total_return_idx(data_dict['returns'])
-
-# sim_a = AnalyseSim(
-#     dates=data_dict['data_dates'], 
-#     tickers=data_dict['tickers'], 
-#     asset_d_mv=tr*10**7, 
-#     asset_d_returns=data_dict['returns']
-# )
