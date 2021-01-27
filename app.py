@@ -86,6 +86,8 @@ class Cache():
                         'no_of_assets': no_of_assets,
                         'top': top,
                         'bottom': bottom,
+                        'weights': s.d_asset_weights(),
+                        'tickers':s.tickers,
                     }
                 ]
             )
@@ -240,9 +242,8 @@ class ContentMenu():
 
         return layout
 
-    def content_button(self, text, button_id, color, block=True):
-
-        return dbc.Button(text, id = button_id, color=color, block=block)
+    def content_button(self, text, button_id, color, block=True, size=None):
+        return dbc.Button(text, id = button_id, color=color, block=block, size=size)
 
 
 class ContentLeft():
@@ -301,6 +302,12 @@ class ContentLeft():
 
         }
 
+    def __get_sim_title(self, cache_sim):
+        '''
+            returns name of simulation
+        '''
+        return cache_sim['sector'].upper() + ' (' + cache_sim['weighting'] +', ' + cache_sim['reb_freq'] + ')'
+
     def content_graph(self, cache_sim1=None, cache_sim2=None, cache_bm=None):
 
         if cache_sim1 is not None:
@@ -316,7 +323,7 @@ class ContentLeft():
                 
                 if c['sector']:
                     # in case of cache_bm (i.e. S&P 500 ts) sector, wheigting is None
-                    _name = c['sector'].upper() + ' (' + c['weighting'] +', ' + c['reb_freq'] + ')'
+                    _name = self.__get_sim_title(c)
                 else:
                     _name = 'S&P 500'
 
@@ -419,6 +426,33 @@ class ContentLeft():
             table = dbc.Table(table_header + table_body, bordered=True, striped=True, hover=True, dark=False)	
 
             return table
+
+    def content_graph_weights(self, cache_sim):
+        '''
+            100% stacked area chart with weights
+        '''        
+        # init figure with layout
+        _title = self.__get_sim_title(cache_sim)
+
+        figure = go.Figure(layout=self.__layout_graph(title=_title ,y_title = 'Weight in %',legend=True, y_format_percent=True))
+
+        dates = [*cache_sim['sim_tr']['date_'].values()]
+
+        for idx,w in enumerate(cache_sim['weights']):
+
+            figure.add_trace(
+                go.Scatter(
+                    x=dates, 
+                    y=w, 
+                    mode='lines', 
+                    name=cache_sim['tickers'][idx],
+                    stackgroup='one',
+                )
+            )
+
+        graph = dcc.Graph(config={'staticPlot':False}, figure=figure)        
+        
+        return graph
 
 class ContentRight():
 
@@ -528,40 +562,87 @@ class Content(Cache, ContentMenu):
                             ],
                         ),
                     ],
-                    style={'vertical-align': 'top'}
+                style={'vertical-align': 'top'}
                 ),
                 # RIGHT
                 html.Div(
                     [
                         html.Br(),
-                        dbc.Row(
+                        dbc.Container(
                             [
-                                dbc.Col(
+                                dbc.Row(
                                     [
-                                        dbc.Container(
-                                            [
-                                                dbc.Card(
-                                                    [
-                                                        dbc.CardBody(
-                                                            [
+                                        dbc.Col(
+                                            dbc.Card(
+                                                [
+                                                    dbc.CardHeader('Portfolio Returns'),
+                                                    dbc.CardBody(
+                                                        [
 
-                                                            ],
-                                                        id = 'graph_div',
-                                                        ),
-                                                        dbc.CardBody(
-                                                            [
-
-                                                            ],
-                                                        id = 'table_div',
-                                                        ),
-                                                    ],
-                                                ),
-                                            ],
-                                        fluid=True
+                                                        ],
+                                                    id = 'graph_div',
+                                                    ),
+                                                ],
+                                            ),
                                         ),
                                     ],
                                 ),
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            dbc.Card(
+                                                [
+                                                    dbc.CardHeader('Metrics'),
+                                                    dbc.CardBody(
+                                                        [
+
+                                                        ],
+                                                    id = 'table_div',
+                                                    ),
+                                                ],
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            dbc.Card(
+                                                [
+                                                    dbc.CardHeader('Asset Weights'),
+                                                    dbc.Col(
+                                                        dbc.ButtonGroup(
+                                                            [
+                                                                self.content_button(
+                                                                    text='Simulation 1', 
+                                                                    button_id='button_weights1', 
+                                                                    color='primary',
+                                                                    size='sm'
+                                                                ),
+                                                                html.Br(),
+                                                                self.content_button(
+                                                                    text='Simulation 2', 
+                                                                    button_id='button_weights2', 
+                                                                    color='primary',
+                                                                    size='sm'
+                                                                ),
+                                                            ],
+                                                        ),
+                                                    ),
+                                                    dbc.CardBody(
+                                                        [
+
+                                                        ],
+                                                    id = 'weights_div',
+                                                    ),
+                                                ],
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                                html.Br(),
                             ],
+                        fluid=True
                         ),
                     ],
                 style={'width': '59%', 'display': 'inline-block', 'vertical-align': 'top'},
@@ -608,7 +689,6 @@ class Content(Cache, ContentMenu):
                     ],
                 style={'width': '39%', 'display': 'inline-block', 'vertical-align': 'top'},
                 ),
-
             ],
         )
 

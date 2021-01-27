@@ -76,6 +76,26 @@ def update_graph(cache_sim1, cache_sim2, cache_bm):
 
 	return [ContentLeft().content_graph(cache_sim1=cache_sim1, cache_sim2=cache_sim2, cache_bm=cache_bm)]
 
+@app.callback(
+	[
+		Output('weights_div','children'),
+	],
+	[	
+		Input('cache_sim1','data'),
+		Input('cache_sim2','data'),
+		Input('button_weights1','n_clicks'),
+		Input('button_weights2','n_clicks'),
+	],
+)
+def update_graph_weights(cache_sim1, cache_sim2, n_clicks1, n_clicks2):
+	if cache_sim1:
+		changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+		if 'button_weights2' in changed_id:
+			cache = cache_sim2
+		else:
+			cache = cache_sim1
+
+		return [ContentLeft().content_graph_weights(cache_sim=cache)]
 
 @app.callback(
 	[

@@ -1,6 +1,4 @@
 import pandas as pd
-
-
 import numpy as np
 from datetime import datetime as dt, timedelta
 from database import Connect
@@ -338,7 +336,7 @@ class AnalyseSim():
 
         return pf_tr
 
-    def __asset_weights(self):
+    def d_asset_weights(self):
         '''
             computing asset weights per date
         '''
@@ -388,7 +386,7 @@ class AnalyseSim():
             computing performance-contribution with carino smoothing.
             (sum of asset contributions add up to total pf-return) 
         '''
-        contr = self.__asset_weights() * self.asset_d_returns
+        contr = self.d_asset_weights() * self.asset_d_returns
         contr_t = np.sum(contr, axis=0)
         
         pf_ret = np.cumprod(1+contr_t) -1
