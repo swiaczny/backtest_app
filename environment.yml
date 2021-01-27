@@ -1,0 +1,20 @@
+name: backtest_app #Environment name
+dependencies:
+  - python=3.6.12
+  - pip:
+    - dash
+    - dash-renderer
+    - dash-core-components
+    - dash-html-components
+    # - dash_bootstrap_components
+    # - dash_html_components
+    - plotly
+    - numpy
+    - datetime
+    - scipy
+    - pandas
+    # - os
+    - psycopg2
+    - dash
+    - plotly
+    - gunicorn # for app deployment
