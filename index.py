@@ -9,7 +9,6 @@ from dash.exceptions import PreventUpdate
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os
 
 # internal
 from app import Cache, Content, ContentRight, ContentLeft
@@ -18,9 +17,7 @@ from app import Cache, Content, ContentRight, ContentLeft
 app = dash.Dash(__name__,suppress_callback_exceptions=True,external_stylesheets=[dbc.themes.CYBORG], 
 )
 
-# DUE TO MULTI-PAGE LAYOUT
 server = app.server
-server.secret_key = os.environ.get('secret_key', 'secret')
 
 # LAYOUT --------------------------------------------------------------------------------------------------------------- 
 
