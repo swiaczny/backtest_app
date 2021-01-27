@@ -1,3 +1,11 @@
 certifi==2020.12.5
 gunicorn==20.0.4
 wincertstore==0.2
+pandas
+numpy
+dash
+dash_bootstrap_components
+dash_core_components
+dash_html_components
+psycopg2
+plotly
