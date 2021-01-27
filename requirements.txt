@@ -2,6 +2,7 @@ dash
 dash-renderer
 dash-core-components
 dash-html-components
+dash-bootstrap-components
 plotly
 numpy
 datetime
