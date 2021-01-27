@@ -54,12 +54,4 @@ simplejson==3.17.0
 six==1.14.0
 soupsieve==2.0
 sqlparse==0.3.1
-traitlets==4.3.3
-urllib3==1.25.9
-wcwidth==0.1.9
-webencodings==0.5.1
-Werkzeug==1.0.1
-whitenoise==5.0.1
-yahoofinancials==1.5
-yahooquery==2.2.4
-yfinance==0.1.54
+scipy
