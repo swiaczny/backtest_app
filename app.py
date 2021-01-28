@@ -96,7 +96,46 @@ class Cache():
 
     def content_cache(self, cache_id):
 
-        return dcc.Store(id=cache_id)
+        return dcc.Store(id=cache_id, storage_type='session')
+        # return dcc.Store(id=cache_id)
+
+class ContentNavbar():
+
+    def content_navbar(self):
+        return dbc.NavbarSimple(
+            [
+                dbc.Col(dbc.NavItem(dcc.Link('Home', href='/home', id='link_home', style={'color':'white'}))),
+                dbc.Col(dbc.NavItem(dcc.Link('Results', href='/results', id='link_results', style={'color':'white'}))),
+                # dbc.NavItem(dcc.NavLink('Home', href='/home', id='link_home', active='exact')),
+                # dbc.NavItem(dcc.NavLink('Results', href='/results', id='link_results', active='exact')),
+            
+            ],
+            brand='Backtest Viewer',
+            brand_href='#',
+            color='primary',
+            dark=True,
+            fluid=True,
+            # sticky='top',
+            fixed='top'
+        )
+
+
+class ContentStatic(Cache, ContentNavbar):
+    '''
+        static content like caches and navbar
+    '''
+    def content_static(self):
+        layout = html.Div(
+            [
+                dcc.Location(id='url', refresh=False),
+                self.content_navbar(),
+                self.content_cache(cache_id='cache_sim1'),
+                self.content_cache(cache_id='cache_sim2'),
+                self.content_cache(cache_id='cache_bm'),
+            ],
+        )
+
+        return layout
 
 
 class ContentMenu():
@@ -454,6 +493,7 @@ class ContentLeft():
         
         return graph
 
+
 class ContentRight():
 
     def __format(self, in_int, to_percent=True, add_sign=False):
@@ -516,66 +556,83 @@ class ContentRight():
             self.__top_bottom_table(cache=cache_sim2, top=False)
         ]
 
-        return sim1_top_bottom, sim2_top_bottom
+        return (sim1_top_bottom, sim2_top_bottom)
 
 class Content(Cache, ContentMenu):
 
     def __init__(self):
         super().__init__()
 
-    def content_main(self):
-
+    def content_home(self):
         layout = html.Div(
-            [
-                # LEFT
+            [   
+                html.Br(),
                 html.Div(
-                    [   
-                        self.content_cache(cache_id='cache_sim1'),
-                        self.content_cache(cache_id='cache_sim2'),
-                        self.content_cache(cache_id='cache_bm'),
-                        html.Br(),
-                        html.Div(
+                    [
+                        dbc.Row(
                             [
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            self.content_sim_parameters(
-                                                header='Set Paramters for Simulation 1',
-                                                sector_id='sector1',
-                                                rebalance_id='reb_freq1', 
-                                                weighting_id='weighting1'
-                                            ),
-                                        ),
-                                        dbc.Col(
-                                            self.content_sim_parameters(
-                                                header='Set Paramters for Simulation 2',
-                                                sector_id='sector2',
-                                                rebalance_id='reb_freq2', 
-                                                weighting_id='weighting2'
-                                            ),
-                                        ),
-                                        dbc.Col(
-                                            self.content_date_range(date_id='date_range')
-                                        ),
-                                    ],
+                                dbc.Col(
+                                    self.content_sim_parameters(
+                                        header='Set Paramters for Simulation 1',
+                                        sector_id='sector1',
+                                        rebalance_id='reb_freq1', 
+                                        weighting_id='weighting1'
+                                    ),
+                                ),
+                                dbc.Col(
+                                    self.content_sim_parameters(
+                                        header='Set Paramters for Simulation 2',
+                                        sector_id='sector2',
+                                        rebalance_id='reb_freq2', 
+                                        weighting_id='weighting2'
+                                    ),
+                                ),
+                                dbc.Col(
+                                    self.content_date_range(date_id='date_range')
                                 ),
                             ],
                         ),
                     ],
-                style={'vertical-align': 'top'}
                 ),
-                # RIGHT
+            ],
+        style={'vertical-align': 'top'}
+        ),
+
+        return layout
+
+    def content_results(self):
+
+        layout = html.Div(
+            [   
                 html.Div(
                     [
                         html.Br(),
                         dbc.Container(
                             [
                                 dbc.Row(
-                                    [
+                                    [   
                                         dbc.Col(
                                             dbc.Card(
                                                 [
-                                                    dbc.CardHeader('Portfolio Returns'),
+                                                    dbc.CardHeader(
+                                                        [   
+                                                            dbc.Row(
+                                                                [
+                                                                    dbc.Col('Portfolio Returns', width=3),
+                                                                    dbc.Col(
+                                                                        self.content_button(
+                                                                            text = 'REFRESH', 
+                                                                            button_id = 'button_refresh', 
+                                                                            color = 'secondary', 
+                                                                            size='sm'
+                                                                        ),
+                                                                    width = 3
+                                                                    ),
+                                                                ],
+                                                            justify='between'
+                                                            ),
+                                                        ],
+                                                    ),
                                                     dbc.CardBody(
                                                         [
 
@@ -604,42 +661,6 @@ class Content(Cache, ContentMenu):
                                         ),
                                     ],
                                 ),
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            dbc.Card(
-                                                [
-                                                    dbc.CardHeader('Asset Weights'),
-                                                    dbc.Col(
-                                                        dbc.ButtonGroup(
-                                                            [
-                                                                self.content_button(
-                                                                    text='Simulation 1', 
-                                                                    button_id='button_weights1', 
-                                                                    color='primary',
-                                                                    size='sm'
-                                                                ),
-                                                                html.Br(),
-                                                                self.content_button(
-                                                                    text='Simulation 2', 
-                                                                    button_id='button_weights2', 
-                                                                    color='primary',
-                                                                    size='sm'
-                                                                ),
-                                                            ],
-                                                        ),
-                                                    ),
-                                                    dbc.CardBody(
-                                                        [
-
-                                                        ],
-                                                    id = 'weights_div',
-                                                    ),
-                                                ],
-                                            ),
-                                        ),
-                                    ],
-                                ),
                                 html.Br(),
                             ],
                         fluid=True
@@ -647,6 +668,7 @@ class Content(Cache, ContentMenu):
                     ],
                 style={'width': '59%', 'display': 'inline-block', 'vertical-align': 'top'},
                 ),
+                # html.Br(),
                 html.Div(
                     [
                         html.Br(),
@@ -688,6 +710,52 @@ class Content(Cache, ContentMenu):
                         ),
                     ],
                 style={'width': '39%', 'display': 'inline-block', 'vertical-align': 'top'},
+                ),
+                html.Div(
+                    [
+                        dbc.Container(
+                            [
+                                dbc.Row(
+                                    [
+                                        dbc.Col(
+                                            dbc.Card(
+                                                [
+                                                    dbc.CardHeader('Asset Weights'),
+                                                    dbc.CardBody(
+                                                        [
+                                                            dbc.Row(
+                                                                [
+                                                                    dbc.Col(
+                                                                        [
+
+                                                                        ],
+                                                                    id = 'weights_div1',
+                                                                    ),
+                                                                ],
+                                                            ),
+                                                            dbc.Row(
+                                                                [
+                                                                    dbc.Col(
+                                                                        [
+
+                                                                        ],
+                                                                    id = 'weights_div2',
+                                                                    ),
+                                                                ],
+                                                            ),
+
+                                                        ],
+                                                    ),
+                                                ],
+                                            ),
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        fluid=True
+                        ),
+                    ],
+                style={'width': '59%', 'display': 'inline-block', 'vertical-align': 'top'},
                 ),
             ],
         )

@@ -11,10 +11,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # internal
-from app import Cache, Content, ContentRight, ContentLeft
+from app import Cache, ContentStatic, Content, ContentRight, ContentLeft
 
 #  THEMES: COSMO | LUX | SPACELAB | CYBORG | DARKLY
 app = dash.Dash(__name__,suppress_callback_exceptions=True,external_stylesheets=[dbc.themes.CYBORG])
+
 server = app.server
 
 # LAYOUT --------------------------------------------------------------------------------------------------------------- 
@@ -22,11 +23,41 @@ server = app.server
 # APP LAYOUT
 app.layout = html.Div(
 	[
-		Content().content_main()
+		ContentStatic().content_static(),
+		html.Br(),
+		html.Br(),
+		html.Br(),
+		html.Div(
+			[
+				html.Div(Content().content_home(),id='page_home', style={'display':'none'}),
+				html.Div([Content().content_results()],id='page_results', style={'display':'none'} )
+			],
+		),
 	],
 )
 
 # CALLBACKS ------------------------------------------------------------------------------------------------------------
+
+## PAGE NAVIGATION
+@app.callback(
+	[	
+		Output('page_home', 'style'),
+		Output('page_results', 'style')
+	],
+	[
+		Input('url', 'pathname')
+	]
+)
+def display_page(pathname):
+	if pathname == '/results':
+		return {'display':'none'}, {'display':'block'}  
+	else:
+		return {'display':'block'}, {'display':'none'}  
+
+
+
+## WRITING TO CACHE
+# RINNING SIMS AND CACHING DATA ON CLIENT SIDE
 @app.callback(
 	[	
 		Output('cache_sim1','data'),
@@ -62,72 +93,38 @@ def cache_data(n_clicks, date_range, sector1, reb_freq1, weighting1, sector2, re
 	else:
 		raise PreventUpdate
 
+## READING FROM CACHE
+# UPDATING TWR GRAPH
 @app.callback(
 	[
 		Output('graph_div','children'),
-	],
-	[	
-		Input('cache_sim1','data'),
-		Input('cache_sim2','data'),
-		Input('cache_bm','data'),
-	],
-)
-def update_graph(cache_sim1, cache_sim2, cache_bm):
-
-	return [ContentLeft().content_graph(cache_sim1=cache_sim1, cache_sim2=cache_sim2, cache_bm=cache_bm)]
-
-@app.callback(
-	[
-		Output('weights_div','children'),
-	],
-	[	
-		Input('cache_sim1','data'),
-		Input('cache_sim2','data'),
-		Input('button_weights1','n_clicks'),
-		Input('button_weights2','n_clicks'),
-	],
-)
-def update_graph_weights(cache_sim1, cache_sim2, n_clicks1, n_clicks2):
-	if cache_sim1:
-		changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
-		if 'button_weights2' in changed_id:
-			cache = cache_sim2
-		else:
-			cache = cache_sim1
-
-		return [ContentLeft().content_graph_weights(cache_sim=cache)]
-
-@app.callback(
-	[
 		Output('table_div','children'),
-	],
-	[	
-		Input('cache_sim1','data'),
-		Input('cache_sim2','data'),
-		Input('cache_bm','data'),
-	],
-)
-def update_table(cache_sim1, cache_sim2, cache_bm):
-	
-	return [ContentLeft().content_table(cache_sim1=cache_sim1, cache_sim2=cache_sim2, cache_bm=cache_bm)]
-
-
-@app.callback(
-	[
+		Output('weights_div1','children'),
+		Output('weights_div2','children'),
 		Output('sim1_tb_div','children'),
 		Output('sim2_tb_div','children'),
 	],
 	[	
+		Input('button_refresh','n_clicks'),
 		Input('cache_sim1','data'),
 		Input('cache_sim2','data'),
+		Input('cache_bm','data'),
 	],
 )
-def update_top_bottom(cache_sim1, cache_sim2):
+def update_left(n_clicks, cache_sim1, cache_sim2, cache_bm):
 
-	if cache_sim1:
-		return ContentRight().content_top_bottom_all(cache_sim1=cache_sim1,cache_sim2=cache_sim2)
+	if cache_sim1 is not None:
+		changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+		if 'button_refresh' in changed_id:
+			tr_graph = [ContentLeft().content_graph(cache_sim1=cache_sim1, cache_sim2=cache_sim2, cache_bm=cache_bm)]
+			metrics = [ContentLeft().content_table(cache_sim1=cache_sim1, cache_sim2=cache_sim2, cache_bm=cache_bm)]
+			weights1 = [ContentLeft().content_graph_weights(cache_sim=cache_sim1)]
+			weights2 = [ContentLeft().content_graph_weights(cache_sim=cache_sim2)]
+			ret_contributions = ContentRight().content_top_bottom_all(cache_sim1=cache_sim1,cache_sim2=cache_sim2)
+
+			return tr_graph, metrics, weights1, weights2, ret_contributions[0], ret_contributions[1]
 	else:
 		raise PreventUpdate
 
 if __name__ == '__main__':
-	app.run_server(debug=True, use_reloader=True)
+	app.run_server(debug=True)
