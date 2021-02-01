@@ -1,6 +1,6 @@
 name: backtest_app #Environment name
 dependencies:
-  - python=3.6.12
+  - python=3.8.5
   - pip:
     - dash
     - dash-renderer
