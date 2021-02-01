@@ -214,7 +214,7 @@ class ContentMenu():
                                                     dbc.Select(id=weighting_id,options=[
                                                         {'label': 'Equal-Weighted', 'value': 'EW'},
                                                         {'label': 'Vol-Weighted', 'value': 'VOL'},
-                                                        {'label': 'MinVar Weights', 'value': 'MINVAR'}
+                                                        {'label': 'Minimum Variance', 'value': 'MINVAR'}
                                                     ],
                                                     value='EW',
                                                     className='mt-mb-2'

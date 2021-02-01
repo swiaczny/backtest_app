@@ -9,4 +9,4 @@ dash_core_components
 dash_html_components
 psycopg2
 plotly
-scipy
+scipy==1.6.0
