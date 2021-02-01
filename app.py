@@ -177,7 +177,7 @@ class ContentMenu():
                                                         {'label': 'financial services', 'value': 'financial services'},
                                                         {'label': 'healthcare', 'value': 'healthcare'},
                                                         {'label': 'technology', 'value': 'technology'},
-                                                        {'label': 'All (loading time up to 3 min)', 'value': 'ALL'},
+                                                        # {'label': 'All (loading time up to 3 min)', 'value': 'ALL'},
                                                     ],
                                                     value='basic materials',
                                                     className='mt-mb-2'
@@ -202,7 +202,7 @@ class ContentMenu():
                                         dbc.Row(
                                             [
                                                 dbc.Col(
-                                                    dbc.Label('Weighting Method:'),
+                                                    dbc.Label('Portfolio Contruction:'),
                                                 className='mt-mb-2'
                                                 ),
                                             ], 
@@ -212,8 +212,9 @@ class ContentMenu():
                                             [
                                                 dbc.Col(
                                                     dbc.Select(id=weighting_id,options=[
-                                                        {'label': 'equal-weighted', 'value': 'EW'},
-                                                        {'label': 'vol-weighted', 'value': 'VOL'}
+                                                        {'label': 'Equal-Weighted', 'value': 'EW'},
+                                                        {'label': 'Vol-Weighted', 'value': 'VOL'},
+                                                        {'label': 'MinVar Weights', 'value': 'MINVAR'}
                                                     ],
                                                     value='EW',
                                                     className='mt-mb-2'
@@ -221,6 +222,7 @@ class ContentMenu():
                                                 ),
                                             ] 
                                         ),
+
                                     ],
                                 ),
                             ],
@@ -665,6 +667,7 @@ class Content(Cache, ContentMenu):
                             ],
                         fluid=True
                         ),
+
                     ],
                 style={'width': '59%', 'display': 'inline-block', 'vertical-align': 'top'},
                 ),

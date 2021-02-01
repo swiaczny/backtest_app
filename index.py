@@ -13,7 +13,7 @@ from plotly.subplots import make_subplots
 # internal
 from app import Cache, ContentStatic, Content, ContentRight, ContentLeft
 
-#  THEMES: COSMO | LUX | SPACELAB | CYBORG | DARKLY
+#  THEMES: COSMO | CYBORG | DARKLY | SLATE
 app = dash.Dash(__name__,suppress_callback_exceptions=True,external_stylesheets=[dbc.themes.CYBORG])
 
 server = app.server
@@ -30,7 +30,7 @@ app.layout = html.Div(
 		html.Div(
 			[
 				html.Div(Content().content_home(),id='page_home', style={'display':'none'}),
-				html.Div([Content().content_results()],id='page_results', style={'display':'none'} )
+				html.Div([Content().content_results()],id='page_results', style={'display':'none'}),
 			],
 		),
 	],
@@ -49,12 +49,11 @@ app.layout = html.Div(
 	]
 )
 def display_page(pathname):
+	# alternative to real mulitpage setup (faster reload and results-page keeps state)
 	if pathname == '/results':
 		return {'display':'none'}, {'display':'block'}  
 	else:
 		return {'display':'block'}, {'display':'none'}  
-
-
 
 ## WRITING TO CACHE
 # RINNING SIMS AND CACHING DATA ON CLIENT SIDE

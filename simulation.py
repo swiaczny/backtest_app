@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime as dt, timedelta
 from database import Connect
 from scipy.stats import rankdata
-
+from scipy import optimize
 # internal
 from util import Dates, Misc, Returns
 
@@ -22,7 +22,7 @@ class DataParams(SimParams):
     def __init__(self, start_date, end_date, sector=None, capital=None, weighting=None, reb_freq=None):
         super().__init__(start_date, end_date, sector, capital, weighting, reb_freq)
         
-        if self.weighting == 'VOL':
+        if self.weighting in ('VOL', 'MINVAR'):
             # lookback period for vol-calculation
             self.lookback = 63
             self.data_start_date = Dates().add_business_days(date_ = self.start_date, days = -self.lookback)
@@ -164,41 +164,49 @@ class Simulation(ImportData):
         self.sim_dates = np.array(Dates().create_weekday_template(self.start_date, self.end_date)['date_'])
         self.tickers = data_['tickers']
 
-        if self.weighting == 'VOL':
+        if self.weighting in ('VOL', 'MINVAR'):
             # extended return array due to lookback for rolling vol computation.
             # Workaroung...not great...not terrible
             self.returns_ext = data_['returns']
-            self.returns = self.returns_ext[0:,self.lookback:]
             self.dates_ext = data_['data_dates']
+            self.returns = self.returns_ext[0:,self.lookback:]
         else:
             self.returns_ext = None
+            self.dates_ext = None
             self.returns = data_['returns']
-            self.data_dates = self.sim_dates
 
-    def __subset_array(self, arr, from_date, to_date=None):
+    def find_date_index(self, dates, from_date, to_date=None):
+        '''
+        '''
+        if to_date is not None:
+            date_idx = np.where((dates >= from_date) & (dates <= to_date))
+        else:
+            date_idx = np.where(dates >= from_date)
+
+        return date_idx
+
+    def __subset_array(self, arr, dates, from_date, to_date=None):
         '''
             subsets array on dates
         '''
-        if to_date is not None:
-            idx = np.where((self.sim_dates >= from_date) & (self.sim_dates <= to_date))
-        else:
-            idx = np.where(self.sim_dates >= from_date)
+        date_idx = self.find_date_index(dates=dates, from_date=from_date, to_date=to_date)
 
         # more-dim-array
         if len(arr.shape) > 1:
-            arr_sub = np.zeros((arr.shape[0], len(idx)))
+            # arr_sub = np.zeros((arr.shape[0], len(date_idx)))
+            arr_sub = np.zeros(arr.shape)
 
             for i in range(arr.shape[0]):
                 if i == 0:
-                    arr_sub = np.array([arr[i][idx]])
+                    arr_sub = np.array([arr[i][date_idx]])
                 else:
-                    arr_sub = np.r_[arr_sub, [arr[i][idx].T]]
+                    arr_sub = np.r_[arr_sub, [arr[i][date_idx].T]]
 
             return arr_sub
 
         # one-dim-array
         else:
-            return arr[idx]
+            return arr[date_idx]
 
     def __create_trade_dates(self):
         '''
@@ -238,8 +246,60 @@ class Simulation(ImportData):
             vol_sim[asset] = vol_ext[asset][self.lookback:]
                 
         return vol_sim
-    
-    def __create_target_weights(self):
+
+    def optimize(self, trade_date=None):
+        '''
+            computing target weights for each trade-date
+        '''
+        from_date = Dates().add_business_days(date_=trade_date, days=-self.lookback)
+        returns_lag = self.__subset_array(arr=self.returns_ext, dates=self.dates_ext, from_date=from_date, to_date=trade_date)
+        # SET X0
+        weights_eq = np.ones([len(returns_lag)])/len(returns_lag)
+        
+        # MINIMIZE:
+        def min_var(x):
+            # to do: shrink it
+            cov = np.cov(returns_lag, bias=True)*252
+            return np.dot(x, np.dot(cov,x))
+        
+        # SUBJECT TO:
+        def sum_weight(x):
+            return np.sum(x)-1
+
+        # BOUNDS
+        bound_low = 0.005
+        bound_high = 0.10
+        b = (bound_low, bound_high)
+        bounds = tuple([b]*len(returns_lag))
+
+        # CONSTRAINTS
+        constraint = {'type': 'eq', 'fun': sum_weight}
+
+        # optimize
+        weights_opt = optimize.minimize(
+            fun = min_var, 
+            x0 = weights_eq,
+            constraints = constraint, 
+            bounds = bounds,
+            method = 'SLSQP',
+            options = {'disp': False}
+            )
+        
+        return weights_opt.x
+
+    def create_min_var_weights(self, trade_dates):
+        '''
+            returning target_weights on trade_dates; rest 0.
+        '''
+        weights = np.zeros(self.returns.shape)
+        for trade_date in trade_dates:
+            date_idx = self.find_date_index(dates=self.sim_dates, from_date=trade_date, to_date=trade_date)
+            # print(self.optimize(trade_date=trade_date))
+            weights[0:,date_idx[0][0]] = self.optimize(trade_date=trade_date)
+
+        return weights
+
+    def __create_target_weights(self, trade_dates=None):
         ''' 
             target weights 
         '''
@@ -257,6 +317,9 @@ class Simulation(ImportData):
             weights = weights / self.__compute_rolling_vols()
             weights = (weights / weights.sum(axis=0))
             
+        if self.weighting == 'MINVAR':
+            weights = self.create_min_var_weights(trade_dates=trade_dates)
+
         return weights
     
     def simulate(self):
@@ -264,6 +327,8 @@ class Simulation(ImportData):
             iterating through trade-date-periods and simualting performance
         ''' 
         trade_dates = self.__create_trade_dates()
+        target_weights = self.__create_target_weights(trade_dates=trade_dates)
+        
         for i, from_date in enumerate(trade_dates):
 
             if i < len(trade_dates)-1:
@@ -273,35 +338,26 @@ class Simulation(ImportData):
                 to_date = None
             
             # SUBSET PRICE DATA ON TIME-PERIOD / COMPUTE TR-INDEX PER ASSET 
-            returns_sub = self.__subset_array(arr=self.returns, from_date=from_date, to_date=to_date)
+            returns_sub = self.__subset_array(dates=self.sim_dates, arr=self.returns, from_date=from_date, to_date=to_date)
             ret = Returns()
             tr_idx = ret.compute_total_return_idx(returns_sub)            
 
             # DRIFT MV PER-ASSET WITH NEW WEIGHTS
-            target_weights = self.__create_target_weights()
             if i == 0:
                 nav = self.capital
                 # select target-allocation on rebalancing date (i.e. from_date)
-                target_mv = nav * self.__subset_array(arr=target_weights, from_date=from_date, to_date=from_date)
+                target_mv = nav * self.__subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
                 target_mv = target_mv.squeeze()
                 mv_assets = (target_mv * tr_idx.T).T
-                # flow_assets = np.zeros(mv_assets.shape)
             else:
                 # nav on last available date)                
                 nav = sum([asset[-1] for asset in mv_assets])
 
                 # select target-allocation on rebalancing date (i.e. from_date)
-                target_mv = nav * self.__subset_array(arr=target_weights, from_date=from_date, to_date=from_date)
+                target_mv = nav * self.__subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
                 target_mv = target_mv.squeeze()
                 mv_drift = (target_mv * tr_idx.T).T
                 mv_assets = np.append(mv_assets, mv_drift[0:,1:], axis=1)
-                
-                # # COMPUTING TRADE FLOWS
-                # # trade_flow_new = mv (after trade) - mv (before trade)
-                # flow_assets_new = np.zeros(mv_drift.shape)
-                # flow_assets_new[0:,1] = target_mv - mv_assets[0:,-1]
-
-                # flow_assets = np.append(flow_assets, flow_assets_new[0:,1:], axis=1)
         
         return mv_assets
 
@@ -436,3 +492,16 @@ class AnalyseSim():
         
         else:
             return None, None
+
+# RUN
+
+# start_date = '2019-10-11'
+# end_date = '2020-10-13'
+# sector = 'utilities'
+# capital = 10**7
+# weighting = 'MINVAR'
+# reb_freq = 'S'
+
+# sim = Simulation(start_date, end_date, sector, capital, weighting, reb_freq)
+# mv = sim.simulate()
+# print(mv)
