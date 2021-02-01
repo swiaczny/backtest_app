@@ -46,7 +46,7 @@ class Cache():
             tr = Returns().compute_total_return_idx(data_dict['returns'])
 
             analyse = AnalyseSim(
-                dates=data_dict['data_dates'], 
+                dates=data.data_dates, 
                 tickers=data_dict['tickers'], 
                 asset_d_mv=tr*10**7, 
                 asset_d_returns=data_dict['returns']

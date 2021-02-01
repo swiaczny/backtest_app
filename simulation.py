@@ -5,31 +5,77 @@ from database import Connect
 from scipy.stats import rankdata
 from scipy import optimize
 # internal
-from util import Dates, Misc, Returns
+from util import Dates, Misc, Returns, Arrays
 
 class SimParams():
 
     def __init__(self, start_date, end_date, sector=None, capital=None, weighting=None, reb_freq=None):
-        self.start_date = start_date
-        self.end_date = end_date
+
+        # UNIVERSE
         self.sector = sector
+
         self.capital = capital
+        
+        # PF CONSTRUCTION
         self.weighting = weighting
         self.reb_freq = reb_freq
-        
-class DataParams(SimParams):
 
-    def __init__(self, start_date, end_date, sector=None, capital=None, weighting=None, reb_freq=None):
-        super().__init__(start_date, end_date, sector, capital, weighting, reb_freq)
-        
-        if self.weighting in ('VOL', 'MINVAR'):
-            # lookback period for vol-calculation
-            self.lookback = 63
-            self.data_start_date = Dates().add_business_days(date_ = self.start_date, days = -self.lookback)
-        else:
-            self.data_start_date = start_date
+        # DATES        
+        self.lookback = self.__set_lookback()
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data_start_date = self.__set_data_start_date()
+        self.data_dates = self.__set_data_dates()
+        self.sim_dates = self.data_dates[self.lookback:]
+        self.trade_dates = self.__set_trade_dates()
 
-class ImportData(DataParams):
+    def __set_lookback(self):
+        '''
+            setting lookback-period (needed for vol calculation)
+        '''
+        i = 0
+        if self.weighting != 'EW':
+            i = 63
+        
+        return i
+
+    def __set_data_start_date(self):
+        '''
+            setting lookback start_date
+        '''
+        return Dates().add_business_days(date_ = self.start_date, days = -self.lookback)
+
+    def __set_data_dates(self):
+        '''
+            returning data-array with weekdays between data_start_date and end_date
+        '''
+        return np.array(Dates().create_weekday_template(self.data_start_date, self.end_date)['date_'])
+    
+    def __set_trade_dates(self):
+        '''
+        out:
+            np.array(dt.timestamps)
+        '''
+
+        freq_map = {
+            'M' : None,
+            'Q' : 3,
+            'S' : 6,
+            'Y' : 12,
+            None: None
+        }
+
+        df = Dates().last_bday_in_month(self.start_date, self.end_date)
+        if self.start_date not in df['date_']:
+            add = pd.DataFrame({'date_': dt.strptime(self.start_date, '%Y-%m-%d')}, index=[0])
+            df = df.append(add)
+            
+        trade_dates = [d for d in df['date_']]
+
+        return sorted(trade_dates)[0::freq_map[self.reb_freq]]
+
+
+class ImportData(SimParams):
 
     def __init__(self, start_date, end_date, sector=None, capital=None, weighting=None, reb_freq=None):
         super().__init__(start_date, end_date, sector, capital, weighting, reb_freq)
@@ -65,19 +111,13 @@ class ImportData(DataParams):
             tickers_unique = np.take(tickers, np.sort(idx))
 
             return np.sort(tickers_unique)
-
-    def __vectorize_dates(self, price_df):
-
-        dates = np.array(price_df['date_'])
-
-        return np.unique(dates)
     
-    def __vectorize_prices(self, price_df, tickers, dates):
+    def __vectorize_prices(self, price_df, tickers):
         '''
             from price_df.col to (mxn) np.array 
         '''
         # (no of assets) x (no of unique dates)
-        prices = np.zeros((len(tickers), len(dates)))
+        prices = np.zeros((len(tickers), len(self.data_dates)))
         for idx, ticker in enumerate(tickers):
             df_sub = price_df.loc[price_df['yh_id']==ticker].copy()
             prices[idx] = df_sub['price']
@@ -142,104 +182,34 @@ class ImportData(DataParams):
     def vectorize_data(self, df):
         '''
             tickers     <np.array>  (1x1) 
-            date_       <np.array>  (1x1)
-            prices      <np.array>  (tickers x date_)
             returns     <np.array>  (tickers x date_)
         '''
         tickers = self.__vectorize_tickers(price_df=df)
-        data_dates = self.__vectorize_dates(price_df=df)
-        prices = self.__vectorize_prices(price_df=df, tickers=tickers, dates=data_dates)
+        prices = self.__vectorize_prices(price_df=df, tickers=tickers)
         returns = self.__vectorize_returns(price_arr=prices)
 
-        return {'tickers': tickers, 'data_dates': data_dates, 'returns': returns}
-  
+        return {'tickers': tickers,  'returns': returns}
 
-class Simulation(ImportData):
-    
-    def __init__(self, start_date, end_date, sector, capital, weighting, reb_freq):
+
+class PFConstruction(ImportData):
+
+    def __init__(self, start_date, end_date, sector=None, capital=None, weighting=None, reb_freq=None):
         super().__init__(start_date, end_date, sector, capital, weighting, reb_freq)
-        
+
         data_ = self.vectorize_data(self.import_price_data())
 
-        self.sim_dates = np.array(Dates().create_weekday_template(self.start_date, self.end_date)['date_'])
         self.tickers = data_['tickers']
-
-        if self.weighting in ('VOL', 'MINVAR'):
-            # extended return array due to lookback for rolling vol computation.
-            # Workaroung...not great...not terrible
-            self.returns_ext = data_['returns']
-            self.dates_ext = data_['data_dates']
-            self.returns = self.returns_ext[0:,self.lookback:]
-        else:
-            self.returns_ext = None
-            self.dates_ext = None
-            self.returns = data_['returns']
-
-    def find_date_index(self, dates, from_date, to_date=None):
-        '''
-        '''
-        if to_date is not None:
-            date_idx = np.where((dates >= from_date) & (dates <= to_date))
-        else:
-            date_idx = np.where(dates >= from_date)
-
-        return date_idx
-
-    def __subset_array(self, arr, dates, from_date, to_date=None):
-        '''
-            subsets array on dates
-        '''
-        date_idx = self.find_date_index(dates=dates, from_date=from_date, to_date=to_date)
-
-        # more-dim-array
-        if len(arr.shape) > 1:
-            # arr_sub = np.zeros((arr.shape[0], len(date_idx)))
-            arr_sub = np.zeros(arr.shape)
-
-            for i in range(arr.shape[0]):
-                if i == 0:
-                    arr_sub = np.array([arr[i][date_idx]])
-                else:
-                    arr_sub = np.r_[arr_sub, [arr[i][date_idx].T]]
-
-            return arr_sub
-
-        # one-dim-array
-        else:
-            return arr[date_idx]
-
-    def __create_trade_dates(self):
-        '''
-        out:
-            np.array(dt.timestamps)
-        '''
-        df = Dates().last_bday_in_month(self.start_date, self.end_date)
-        if self.start_date not in df['date_']:
-            add = pd.DataFrame({'date_': dt.strptime(self.start_date, '%Y-%m-%d')}, index=[0])
-            df = df.append(add)
-            
-        trade_dates = [d for d in df['date_']]
-
-        if self.reb_freq == 'M':
-            return sorted(trade_dates)
-
-        if self.reb_freq == 'Q':
-            return sorted(trade_dates)[0::3]
-
-        if self.reb_freq == 'S':
-            return sorted(trade_dates)[0::6]
-        
-        if self.reb_freq == 'Y':
-            return sorted(trade_dates)[0::12]
-        
-    def __compute_rolling_vols(self):
+        self.returns_ext = data_['returns']
+        self.returns = self.returns_ext[0:,self.lookback:]
+    
+    def __rolling_vols(self):
         '''
             computing rolling ann.vol
 
             return mxn np.array with no nan´s (i.e. return-shape equals sim-date-period with no lookback-period)
         '''        
-        vol_ext = np.zeros((len(self.tickers), len(self.dates_ext)))
-        vol_sim =  np.zeros((len(self.tickers), len(self.sim_dates)))
+        vol_ext = np.zeros(self.returns_ext.shape)
+        vol_sim = np.zeros(self.returns.shape)
 
         for asset in range(len(self.tickers)):
             vol_ext[asset] = (np.array(pd.Series(self.returns_ext[asset]).rolling(self.lookback).std()))*(252**0.5)
@@ -247,12 +217,27 @@ class Simulation(ImportData):
                 
         return vol_sim
 
-    def optimize(self, trade_date=None):
+    def __equal_weights(self):
+        '''
+            equal weighting
+        '''
+        return np.ones(self.returns.shape) / len(self.tickers)
+
+    def __vol_weights(self):
+        '''
+            inverse vol weighting
+        '''
+        weights = np.ones(self.returns.shape) / self.__rolling_vols()
+        weights = (weights / weights.sum(axis=0))
+        
+        return weights
+
+    def __optimize(self, trade_date=None):
         '''
             computing target weights for each trade-date
         '''
         from_date = Dates().add_business_days(date_=trade_date, days=-self.lookback)
-        returns_lag = self.__subset_array(arr=self.returns_ext, dates=self.dates_ext, from_date=from_date, to_date=trade_date)
+        returns_lag = Arrays().subset_array(arr=self.returns_ext, dates=self.data_dates, from_date=from_date, to_date=trade_date)
         # SET X0
         weights_eq = np.ones([len(returns_lag)])/len(returns_lag)
         
@@ -287,66 +272,66 @@ class Simulation(ImportData):
         
         return weights_opt.x
 
-    def create_min_var_weights(self, trade_dates):
+    def __min_var_weights(self):
         '''
             returning target_weights on trade_dates; rest 0.
         '''
         weights = np.zeros(self.returns.shape)
-        for trade_date in trade_dates:
-            date_idx = self.find_date_index(dates=self.sim_dates, from_date=trade_date, to_date=trade_date)
-            # print(self.optimize(trade_date=trade_date))
-            weights[0:,date_idx[0][0]] = self.optimize(trade_date=trade_date)
+        for td in self.trade_dates:
+            date_idx = Arrays().find_date_index(dates=self.sim_dates, from_date=td, to_date=td)
+            weights[0:,date_idx[0][0]] = self.__optimize(trade_date=td)
 
         return weights
 
-    def __create_target_weights(self, trade_dates=None):
+    def target_weights(self, trade_dates=None):
         ''' 
             target weights 
-        '''
-
-        # weights = np.ones(self.prices.shape)
-        weights = np.ones(self.returns.shape)
-        
+        '''        
         # equal weight
         if self.weighting == 'EW':
+            weights = self.__equal_weights()
 
-            weights = weights / len(self.tickers)
-
-        # inverse vol weighting and normalizing
+        # inverse vol-weighting
         if self.weighting == 'VOL':
-            weights = weights / self.__compute_rolling_vols()
-            weights = (weights / weights.sum(axis=0))
-            
+            weights = self.__vol_weights()
+        
+        # minimum variance pf
         if self.weighting == 'MINVAR':
-            weights = self.create_min_var_weights(trade_dates=trade_dates)
+            weights = self.__min_var_weights()
 
         return weights
     
+
+class Simulation(PFConstruction):
+    
+    def __init__(self, start_date, end_date, sector, capital, weighting, reb_freq):
+        super().__init__(start_date, end_date, sector, capital, weighting, reb_freq)
+
     def simulate(self):
         '''
             iterating through trade-date-periods and simualting performance
         ''' 
-        trade_dates = self.__create_trade_dates()
-        target_weights = self.__create_target_weights(trade_dates=trade_dates)
+        target_weights = self.target_weights()
         
-        for i, from_date in enumerate(trade_dates):
+        for i, from_date in enumerate(self.trade_dates):
 
-            if i < len(trade_dates)-1:
-                to_date = trade_dates[i+1]
+            if i < len(self.trade_dates)-1:
+                to_date = self.trade_dates[i+1]
             else:
                 # last trade date, i.e. no end_date
                 to_date = None
             
             # SUBSET PRICE DATA ON TIME-PERIOD / COMPUTE TR-INDEX PER ASSET 
-            returns_sub = self.__subset_array(dates=self.sim_dates, arr=self.returns, from_date=from_date, to_date=to_date)
             ret = Returns()
+            ar = Arrays()
+            returns_sub = ar.subset_array(dates=self.sim_dates, arr=self.returns, from_date=from_date, to_date=to_date)
             tr_idx = ret.compute_total_return_idx(returns_sub)            
 
             # DRIFT MV PER-ASSET WITH NEW WEIGHTS
             if i == 0:
                 nav = self.capital
                 # select target-allocation on rebalancing date (i.e. from_date)
-                target_mv = nav * self.__subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
+                target_mv = nav * ar.subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
                 target_mv = target_mv.squeeze()
                 mv_assets = (target_mv * tr_idx.T).T
             else:
@@ -354,7 +339,7 @@ class Simulation(ImportData):
                 nav = sum([asset[-1] for asset in mv_assets])
 
                 # select target-allocation on rebalancing date (i.e. from_date)
-                target_mv = nav * self.__subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
+                target_mv = nav * ar.subset_array(dates=self.sim_dates, arr=target_weights, from_date=from_date, to_date=from_date)
                 target_mv = target_mv.squeeze()
                 mv_drift = (target_mv * tr_idx.T).T
                 mv_assets = np.append(mv_assets, mv_drift[0:,1:], axis=1)
@@ -493,15 +478,3 @@ class AnalyseSim():
         else:
             return None, None
 
-# RUN
-
-# start_date = '2019-10-11'
-# end_date = '2020-10-13'
-# sector = 'utilities'
-# capital = 10**7
-# weighting = 'MINVAR'
-# reb_freq = 'S'
-
-# sim = Simulation(start_date, end_date, sector, capital, weighting, reb_freq)
-# mv = sim.simulate()
-# print(mv)

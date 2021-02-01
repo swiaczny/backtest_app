@@ -34,6 +34,7 @@ class Dates():
             output
                 <dt.datetime>
         '''
+            
         if not isinstance(date_, dt):
             try:
                 date_ = dt.strptime(date_, '%Y-%m-%d')
@@ -41,20 +42,25 @@ class Dates():
                 print("failed to parse {date_} as date")
                 return None
 
-        counter = abs(days)
+        if abs(days) >0:
 
-        d = 0
-        while counter > 0:
-            if days >0:
-                d += 1
-            else:
-                d -= 1
-                
-            next_date = date_ + timedelta(days=d)
-            if next_date.weekday()<5:
-                counter -= 1
+            counter = abs(days)
 
-        return next_date
+            d = 0
+            while counter > 0:
+                if days >0:
+                    d += 1
+                else:
+                    d -= 1
+                    
+                next_date = date_ + timedelta(days=d)
+                if next_date.weekday()<5:
+                    counter -= 1
+
+            return next_date
+        
+        else:
+            return date_
      
     def last_bday_in_month(self, start_date, end_date):
         '''
@@ -98,6 +104,7 @@ class Dates():
 
         return df
     
+
 class Returns():
  
     def compute_d_returns(self, prices):
@@ -163,7 +170,40 @@ class Returns():
         return_arr[idx_nan] = np.take(ret_mean, idx_nan[1])
 
         return return_arr
-    
+
+
+class Arrays():
+
+    def find_date_index(self, dates, from_date, to_date=None):
+        '''
+        '''
+        if to_date is not None:
+            date_idx = np.where((dates >= from_date) & (dates <= to_date))
+        else:
+            date_idx = np.where(dates >= from_date)
+
+        return date_idx
+
+    def subset_array(self, arr, dates, from_date, to_date=None):
+        '''
+            subsets array on dates
+        '''
+        date_idx = self.find_date_index(dates=dates, from_date=from_date, to_date=to_date)
+
+        # more-dim-array
+        if len(arr.shape) > 1:
+            # arr_sub = np.zeros((arr.shape[0], len(date_idx)))
+            arr_sub = np.zeros(arr.shape)
+
+            for i in range(arr.shape[0]):
+                if i == 0:
+                    arr_sub = np.array([arr[i][date_idx]])
+                else:
+                    arr_sub = np.r_[arr_sub, [arr[i][date_idx].T]]
+
+            return arr_sub
+
+
 class Misc():
     '''
         misc helper methods
